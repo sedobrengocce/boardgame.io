@@ -8,7 +8,7 @@
 
 import { FlowWithPhases } from './flow';
 import { AI } from './ai';
-import { GenSeed } from './random';
+import { Random } from './random';
 
 /**
  * Game
@@ -89,7 +89,7 @@ function Game({ name, setup, moves, playerView, flow, seed, ai }) {
   if (setup === undefined) setup = () => ({});
   if (moves === undefined) moves = {};
   if (playerView === undefined) playerView = G => G;
-  if (seed === undefined) seed = GenSeed();
+  if (seed === undefined) seed = Random.seed();
 
   if (!ai || typeof ai != 'function') {
     ai = AI(ai || {});

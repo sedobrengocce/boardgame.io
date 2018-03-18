@@ -26,6 +26,7 @@ test('basic', () => {
 test('processMove', () => {
   const testObj = { test: true };
   expect(game.processMove(testObj, { type: 'A' })).toEqual(testObj);
+  expect(game.processMove(testObj, { type: 'C' })).toEqual(testObj);
   expect(game.processMove(testObj, { type: 'B' })).toEqual(null);
 });
 
@@ -72,8 +73,8 @@ test('rounds with starting player token', () => {
         {
           name: 'main',
           turnOrder: {
-            first: G => G.startingPlayerToken + '',
-            next: (G, ctx) => (+ctx.currentPlayer + 1) % ctx.numPlayers + '',
+            first: G => G.startingPlayerToken,
+            next: (G, ctx) => (+ctx.playOrderPos + 1) % ctx.playOrder.length,
           },
         },
       ],
@@ -151,7 +152,7 @@ test('possibleMoves for tic-tac-toe', () => {
     { move: 'clickCell', args: [7] },
     { move: 'clickCell', args: [8] },
   ]);
-  state = reducer(state, makeMove('clickCell', [4], 0));
+  state = reducer(state, makeMove('clickCell', [4], '0'));
   expect(state.ai.possibleMoves).toEqual([
     { move: 'clickCell', args: [0] },
     { move: 'clickCell', args: [1] },
@@ -172,22 +173,22 @@ test('serpentine setup phases', () => {
         {
           name: 'first setup round',
           turnOrder: {
-            first: () => '0',
-            next: (G, ctx) => (+ctx.currentPlayer + 1) % ctx.numPlayers + '',
+            first: () => 0,
+            next: (G, ctx) => (+ctx.playOrderPos + 1) % ctx.playOrder.length,
           },
         },
         {
           name: 'second setup round',
           turnOrder: {
-            first: (G, ctx) => ctx.numPlayers - 1 + '',
-            next: (G, ctx) => (+ctx.currentPlayer - 1) % ctx.numPlayers + '',
+            first: (G, ctx) => ctx.playOrder.length - 1,
+            next: (G, ctx) => (+ctx.playOrderPos - 1) % ctx.playOrder.length,
           },
         },
         {
           name: 'main phase',
           turnOrder: {
-            first: () => '0',
-            next: (G, ctx) => (+ctx.currentPlayer + 1) % ctx.numPlayers + '',
+            first: () => 0,
+            next: (G, ctx) => (+ctx.playOrderPos + 1) % ctx.playOrder.length,
           },
         },
       ],

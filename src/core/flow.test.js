@@ -15,6 +15,14 @@ test('Flow', () => {
   const flow = Flow({});
   const state = {};
   expect(flow.processGameEvent(state, { type: 'unknown' })).toBe(state);
+
+  // Check defaults of all arguments
+  expect(flow.ctx()).toMatchObject({});
+  expect(flow.eventNames.length).toBe(0);
+  expect(flow.init({ a: 5 })).toMatchObject({ a: 5 });
+  expect(flow.canMakeMove({}, {}, undefined)).toBe(true);
+  expect(flow.processMove({ b: 6 })).toMatchObject({ b: 6 });
+  expect(flow.optimisticUpdate()).toBe(true);
 });
 
 test('FlowWithPhases', () => {
@@ -66,11 +74,11 @@ test('movesPerTurn', () => {
     let flow = FlowWithPhases({ movesPerTurn: 2 });
     let state = { ctx: flow.ctx(2) };
     expect(state.ctx.turn).toBe(0);
-    state = flow.processMove(state, { move: {} });
+    state = flow.processMove(state, { move: {}, payload: {} });
     expect(state.ctx.turn).toBe(0);
     state = flow.processGameEvent(state, { type: 'endTurn' });
     expect(state.ctx.turn).toBe(0);
-    state = flow.processMove(state, { move: {} });
+    state = flow.processMove(state, { move: {}, payload: {} });
     expect(state.ctx.turn).toBe(1);
   }
 
@@ -81,17 +89,17 @@ test('movesPerTurn', () => {
     });
     let state = { ctx: flow.ctx(2) };
     expect(state.ctx.turn).toBe(0);
-    state = flow.processMove(state, { move: {} });
+    state = flow.processMove(state, { move: {}, payload: {} });
     expect(state.ctx.turn).toBe(0);
     state = flow.processGameEvent(state, { type: 'endTurn' });
     expect(state.ctx.turn).toBe(0);
-    state = flow.processMove(state, { move: {} });
+    state = flow.processMove(state, { move: {}, payload: {} });
     expect(state.ctx.turn).toBe(1);
 
     state = flow.processGameEvent(state, { type: 'endPhase' });
 
     expect(state.ctx.turn).toBe(1);
-    state = flow.processMove(state, { move: {} });
+    state = flow.processMove(state, { move: {}, payload: {} });
     expect(state.ctx.turn).toBe(2);
   }
 });
@@ -179,7 +187,7 @@ test('onMove', () => {
   {
     let flow = FlowWithPhases({ onMove });
     let state = { G: {}, ctx: flow.ctx(2) };
-    state = flow.processMove(state);
+    state = flow.processMove(state, { payload: {} });
     expect(state.G).toEqual({ A: true });
   }
 
@@ -189,10 +197,10 @@ test('onMove', () => {
       phases: [{ name: 'A' }, { name: 'B', onMove: () => ({ B: true }) }],
     });
     let state = { G: {}, ctx: flow.ctx(2) };
-    state = flow.processMove(state);
+    state = flow.processMove(state, { payload: {} });
     expect(state.G).toEqual({ A: true });
     state = flow.processGameEvent(state, { type: 'endPhase' });
-    state = flow.processMove(state);
+    state = flow.processMove(state, { payload: {} });
     expect(state.G).toEqual({ B: true });
   }
 });
@@ -264,7 +272,7 @@ test('endPhaseIf', () => {
   }
 
   {
-    const t = flow.processMove(state, { type: 'move' });
+    const t = flow.processMove(state, { type: 'move', payload: {} });
     expect(t.ctx.phase).toBe('B');
   }
 
@@ -402,7 +410,7 @@ test('endTurnIf', () => {
   }
 });
 
-test('validator', () => {
+test('canMakeMove', () => {
   let game = Game({
     moves: {
       A: () => ({ A: true }),
@@ -425,9 +433,9 @@ test('validator', () => {
   // Basic.
   let flow;
   flow = Flow({});
-  expect(flow.validator(state.G, state.ctx)).toBe(true);
-  flow = Flow({ validator: () => false });
-  expect(flow.validator(state.G, state.ctx)).toBe(false);
+  expect(flow.canMakeMove(state.G, state.ctx)).toBe(true);
+  flow = Flow({ canMakeMove: () => false });
+  expect(flow.canMakeMove(state.G, state.ctx)).toBe(false);
 
   // B is disallowed in phase A.
   state = reducer(state, makeMove('B'));
@@ -462,4 +470,150 @@ test('validator', () => {
   expect(state.G).not.toMatchObject({ A: true });
   state = reducer(state, makeMove('B'));
   expect(state.G).not.toMatchObject({ B: true });
+
+  // the flow runs a user-provided validation
+  flow = FlowWithPhases({ canMakeMove: () => true });
+  expect(flow.canMakeMove(state.G, state.ctx)).toBe(false);
+});
+
+test('undo / redo', () => {
+  let game = Game({
+    moves: {
+      move: (G, ctx, arg) => ({ ...G, [arg]: true }),
+    },
+  });
+
+  const reducer = createGameReducer({ game, numPlayers: 2 });
+
+  let state = reducer(undefined, { type: 'init' });
+
+  state = reducer(state, makeMove('move', 'A'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, makeMove('move', 'B'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('undo'));
+  state = reducer(state, gameEvent('undo'));
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({});
+
+  state = reducer(state, gameEvent('redo'));
+  state = reducer(state, makeMove('move', 'C'));
+  expect(state.G).toEqual({ A: true, C: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, C: true });
+
+  state = reducer(state, gameEvent('undo'));
+  state = reducer(state, gameEvent('undo'));
+  state = reducer(state, makeMove('move', 'A'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('endTurn'));
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+});
+
+test('undo / redo restricted by undoableMoves', () => {
+  let game = Game({
+    moves: {
+      undoableMove: (G, ctx, arg) => ({ ...G, [arg]: true }),
+      move: (G, ctx, arg) => ({ ...G, [arg]: true }),
+    },
+
+    flow: {
+      undoableMoves: ['undoableMove'],
+    },
+  });
+
+  const reducer = createGameReducer({ game, numPlayers: 2 });
+
+  let state = reducer(undefined, { type: 'init' });
+
+  state = reducer(state, makeMove('move', 'A'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, makeMove('undoableMove', 'B'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, B: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, makeMove('undoableMove', 'C'));
+  expect(state.G).toEqual({ A: true, C: true });
+
+  state = reducer(state, gameEvent('undo'));
+  expect(state.G).toEqual({ A: true });
+
+  state = reducer(state, gameEvent('redo'));
+  expect(state.G).toEqual({ A: true, C: true });
+});
+
+test('canMakeMove', () => {
+  // default behaviour
+  const pid = { playerID: 0 };
+
+  let flow = Flow({});
+  expect(flow.canMakeMove({}, {}, pid)).toBe(false);
+  // NOTE: currentPlayer is not allowed to make a move by default.
+  // his playerID must be included in the actionPlayers array.
+  expect(flow.canMakeMove({}, { currentPlayer: 0 }, pid)).toBe(false);
+  expect(flow.canMakeMove({}, { actionPlayers: ['any'] }, pid)).toBe(true);
+  expect(flow.canMakeMove({}, { actionPlayers: [0] }, pid)).toBe(true);
+  expect(flow.canMakeMove({}, { actionPlayers: [1, 2, 3] }, pid)).toBe(false);
+
+  // no one can make a move
+  flow = Flow({ canMakeMove: () => false });
+  expect(flow.canMakeMove({}, {}, pid)).toBe(false);
+  expect(flow.canMakeMove({}, { currentPlayer: 0 }, pid)).toBe(false);
+  expect(flow.canMakeMove({}, {}, 'any')).toBe(false);
+
+  // flow with phases passes canMakeMove
+  flow = FlowWithPhases({ canMakeMove: () => false });
+  expect(flow.canMakeMove({}, {}, pid)).toBe(false);
+  expect(flow.canMakeMove({}, { currentPlayer: 0 }, pid)).toBe(false);
+  expect(flow.canMakeMove({}, {}, 'any')).toBe(false);
+});
+
+test('endGame', () => {
+  const flow = FlowWithPhases({ endGame: true });
+  const state = { ctx: {} };
+
+  {
+    const t = flow.processGameEvent(state, gameEvent('endGame').payload);
+    expect(t.ctx.gameover).toBe(true);
+  }
+
+  {
+    const t = flow.processGameEvent(state, gameEvent('endGame', 42).payload);
+    expect(t.ctx.gameover).toBe(42);
+  }
 });
