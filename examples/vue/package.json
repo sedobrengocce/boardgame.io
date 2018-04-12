@@ -6,8 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "webpack-dev-server --inline --progress --config build/webpack.dev.conf.js",
-    "start": "npm run dev",
-    "build": "node build/build.js"
+    "start": "npm run dev"
   },
   "dependencies": {
     "vue": "^2.5.2",
@@ -51,8 +50,8 @@
     "webpack-merge": "^4.1.0"
   },
   "engines": {
-    "node": ">= 6.0.0",
-    "npm": ">= 3.0.0"
+    "node": ">=7.6.0",
+    "npm": ">=5.4"
   },
   "browserslist": [
     "> 1%",
